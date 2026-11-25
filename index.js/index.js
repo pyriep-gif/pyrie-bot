@@ -1,49 +1,58 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
+const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth');
-    const sock = makeWASocket({
-        logger: pino({ level: 'silent' }),
-        printQRInTerminal: true,
-        auth: state,
-        browser: ['Pyrie Bot', 'Chrome', '1.0']
-    });
+// YOUR NUMBER - already set
+const MY_NUMBER = "263775295231";
+const WATERMARK = "\n\n> © Sparrow & Pyrie";
 
+async function start() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const sock = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        printQRInTerminal: false,
+        browser: ["Pyrie Bot", "Chrome", "1.0.0"]
+    });
     sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        if (qr) {
-            console.log('SCAN THIS QR:');
-            qrcode.generate(qr, { small: true });
+    sock.ev.on('connection.update', async (update) => {
+        const { connection } = update;
+        if (connection === 'open') {
+            console.log('✅ Pyrie Bot Connected!');
         }
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed, reconnecting...', shouldReconnect);
-            if (shouldReconnect) startBot();
-        } else if (connection === 'open') {
-            console.log('✅ Pyrie Bot Connected!');
+            console.log('Disconnected, reconnecting...');
+            start();
         }
     });
 
+    // Pairing Code - automatic, no typing needed
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(MY_NUMBER);
+                console.log('================================');
+                console.log('YOUR PAIRING CODE IS: ' + code);
+                console.log('================================');
+            } catch (e) {
+                console.log('Failed to get pairing code: ' + e.message);
+            }
+        }, 3000);
+    }
+
+    // Bot replies with Sparrow & Pyrie watermark
     sock.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message || msg.key.fromMe) return;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
         const from = msg.key.remoteJid;
-
-        if (text.trim() === '.ping') {
-            await sock.sendMessage(from, { text: 'Pong! Pyrie Bot is alive 🔥' });
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+        
+        if (text.toLowerCase() === "hi" || text.toLowerCase() === "hello") {
+            await sock.sendMessage(from, { text: "Hello! I am Pyrie Bot 🤖" + WATERMARK });
         }
-        if (text.trim() === '.menu') {
-            await sock.sendMessage(from, { text: 'Pyrie Bot Menu:\n.ping - Check bot\n.menu - Show menu\n.hi - Say hi' });
-        }
-        if (text.trim() === '.hi') {
-            await sock.sendMessage(from, { text: 'Hi! I am Pyrie Bot 🤖' });
+        if (text.toLowerCase() === "ping") {
+            await sock.sendMessage(from, { text: "Pong! Bot is alive ✅" + WATERMARK });
         }
     });
 }
-
-startBot();
+start();
