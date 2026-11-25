@@ -6,7 +6,7 @@ const WATERMARK = "\n\n> © Sparrow & Pyrie";
 let pairingAsked = false; // STOP spam - only ask once
 
 async function start() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_new')
     const sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
